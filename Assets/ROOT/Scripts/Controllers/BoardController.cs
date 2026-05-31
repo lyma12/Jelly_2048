@@ -7,8 +7,10 @@ namespace ROOT.Scripts.Controllers
 {
     public class BoardController : MonoBehaviour
     {
+        [Header("References")]
+        public MeshFilter borderMeshFilter;
+        
         [SerializeField] private Vector2Int gridSize = new Vector2Int(10, 10);
-        [SerializeField] private GameObject cellPrefab;
         [SerializeField] private float cellSize = 0.8f;
         [SerializeField] private LevelConfig levelConfig;
         private CellItem[,] cells;
@@ -37,10 +39,11 @@ namespace ROOT.Scripts.Controllers
                     var newCell = new CellItem();
                     newCell.CellIndex = new Index2(i, j);
                     cells[i, j] = newCell;
-                    var visualCell = Instantiate(cellPrefab, transform, true);
-                    visualCell.transform.localPosition = startPos + new Vector3(i * cellSize, 0, -j * cellSize);
                 }
             }
+            CameraController.Init(transform.position, gridSize);
+
+            GenerateBorder(CameraController.FrustrumSize);
         }
         public void StartGame()
         {
@@ -296,7 +299,91 @@ namespace ROOT.Scripts.Controllers
 
             return list;
         }
-        
+        #region Init
+
+         private void GenerateBorder(Vector2 environmentSize)
+        {
+            List<Vector3> verts = new List<Vector3>();
+            Vector2[] uvs = new Vector2[verts.Count];
+            List<int> tris = new List<int>();
+
+            // top plane
+            float mostLeftX = -(environmentSize.x - gridSize.x) * 0.5f - 0.5f;
+            float mostRightX = gridSize.x - mostLeftX - 1f;
+            float mostLowZ = -(environmentSize.y - gridSize.y) * 0.5f;
+            float mostHighZ = gridSize.y - mostLowZ;
+
+            verts.Add(new Vector3(mostLeftX, 1f, mostHighZ));
+            verts.Add(new Vector3(-0.5f, 1f, mostHighZ));
+            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, mostHighZ));
+            verts.Add(new Vector3(mostRightX, 1f, mostHighZ));
+
+            verts.Add(new Vector3(mostLeftX, 1f, gridSize.y - 0.5f));
+            verts.Add(new Vector3(-0.5f, 1f, gridSize.y - 0.5f));
+            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, gridSize.y - 0.5f));
+            verts.Add(new Vector3(mostRightX, 1f, gridSize.y - 0.5f));
+
+            tris.AddRange(new int[] { 0, 5, 4 });
+            tris.AddRange(new int[] { 0, 1, 5 });
+            tris.AddRange(new int[] { 1, 2, 6 });
+            tris.AddRange(new int[] { 1, 6, 5 });
+            tris.AddRange(new int[] { 2, 3, 7 });
+            tris.AddRange(new int[] { 2, 7, 6 });
+
+
+            verts.Add(new Vector3(mostLeftX, 1f, -0.5f));
+            verts.Add(new Vector3(-0.5f, 1f, -0.5f));
+            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, -0.5f));
+            verts.Add(new Vector3(mostRightX, 1f, -0.5f));
+
+            tris.AddRange(new int[] { 4, 9, 8 });
+            tris.AddRange(new int[] { 4, 5, 9 });
+            tris.AddRange(new int[] { 6, 7, 11 });
+            tris.AddRange(new int[] { 6, 11, 10 });
+
+
+            verts.Add(new Vector3(mostLeftX, 1f, mostLowZ));
+            verts.Add(new Vector3(-0.5f, 1f, mostLowZ));
+            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, mostLowZ));
+            verts.Add(new Vector3(mostRightX, 1f, mostLowZ));
+
+            tris.AddRange(new int[] { 8, 9, 13 });
+            tris.AddRange(new int[] { 8, 13, 12 });
+            tris.AddRange(new int[] { 9, 10, 14 });
+            tris.AddRange(new int[] { 9, 14, 13 });
+            tris.AddRange(new int[] { 10, 15, 14 });
+            tris.AddRange(new int[] { 10, 11, 15 });
+
+
+            // vertical borders
+
+            verts.Add(new Vector3(-0.5f, 1f, gridSize.y - 0.5f));                 //16
+            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, gridSize.y - 0.5f));
+            verts.Add(new Vector3(-0.5f, 0f, gridSize.y - 0.5f));
+            verts.Add(new Vector3(gridSize.x - 0.5f, 0f, gridSize.y - 0.5f));
+            verts.Add(new Vector3(-0.5f, 1f, -0.5f));                               //20
+            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, -0.5f));
+            verts.Add(new Vector3(-0.5f, 0f, -0.5f));
+            verts.Add(new Vector3(gridSize.x - 0.5f, 0f, -0.5f));                 //23
+
+            tris.AddRange(new int[] { 20, 16, 18 });
+            tris.AddRange(new int[] { 20, 18, 22 });
+            tris.AddRange(new int[] { 16, 17, 19 });
+            tris.AddRange(new int[] { 16, 19, 18 });
+            tris.AddRange(new int[] { 17, 21, 19 });
+            tris.AddRange(new int[] { 19, 21, 23 });
+
+
+            Mesh mesh = new Mesh();
+            mesh.vertices = verts.ToArray();
+            mesh.triangles = tris.ToArray();
+            mesh.RecalculateNormals();
+
+
+            borderMeshFilter.mesh = mesh;
+        }
+
+        #endregion
 
         #region Logicc
 
