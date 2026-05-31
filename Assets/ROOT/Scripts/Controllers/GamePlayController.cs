@@ -24,7 +24,7 @@ namespace ROOT.Scripts.Controllers
         }
         public void OnPlay()
         {
-            boardController.ClearBoard();
+            boardController.StartGame();
             currentState = GameState.Playing;
         }
         public void Update()

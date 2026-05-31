@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Watermelon
 {
-    [DefaultExecutionOrder(-5)]
+    [DefaultExecutionOrder(-50)]
     public class PoolSceneHolder : MonoBehaviour
     {
         [SerializeField] Pool[] pools;
@@ -11,6 +11,7 @@ namespace Watermelon
         {
             foreach(Pool pool in pools)
             {
+                Debug.LogError("ini");
                 pool.Init();
             }
         }

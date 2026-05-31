@@ -28,6 +28,7 @@ namespace ROOT.Scripts.Controllers
         }
         public void Init()
         {
+            cells = new CellItem[gridSize.x, gridSize.y];
             var startPos = new Vector3(-gridSize.x * 0.5f, 0, gridSize.y * 0.5f);
             for (var i = 0; i < gridSize.x; i++)
             {
@@ -37,7 +38,7 @@ namespace ROOT.Scripts.Controllers
                     newCell.CellIndex = new Index2(i, j);
                     cells[i, j] = newCell;
                     var visualCell = Instantiate(cellPrefab, transform, true);
-                    visualCell.transform.localPosition = startPos + new Vector3(i * cellSize, 0, j * cellSize);
+                    visualCell.transform.localPosition = startPos + new Vector3(i * cellSize, 0, -j * cellSize);
                 }
             }
         }
