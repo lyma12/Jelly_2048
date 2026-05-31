@@ -85,7 +85,7 @@ namespace Watermelon.JellyMerge
             // backplane setup
             backPlaneTransform.position = levelCenter;
 
-            Vector3 scale = new Vector3(levelSize.x, levelSize.y, 1f);
+            Vector3 scale = new Vector3(levelSize.x, 1, levelSize.y);
 
             if (smoothMovement)
                 backPlaneTransform.DOScale(scale, animationTime);

@@ -31,7 +31,6 @@ namespace ROOT.Scripts.Controllers
         public void Init()
         {
             cells = new CellItem[gridSize.x, gridSize.y];
-            var startPos = new Vector3(-gridSize.x * 0.5f, 0, gridSize.y * 0.5f);
             for (var i = 0; i < gridSize.x; i++)
             {
                 for (var j = 0; j < gridSize.y; j++)
@@ -106,7 +105,6 @@ namespace ROOT.Scripts.Controllers
                 0,
                 gridSize.y * 0.5f
             );
-
             Vector3 local = transform.InverseTransformPoint(worldPosition) - startPos;
 
             int x = Mathf.RoundToInt(local.x / cellSize);

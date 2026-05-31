@@ -97,7 +97,7 @@ namespace Watermelon.JellyMerge
         private void InitPools()
         {
             simpleCubePool = PoolManager.GetPoolByName("SimpleCube");
-            jellyCubePool = PoolManager.GetPoolByName("JellyCube");
+            //jellyCubePool = PoolManager.GetPoolByName("JellyCube");
         }
 
         public void InitGraphics(GraphicsType graphicsType)
@@ -162,7 +162,7 @@ namespace Watermelon.JellyMerge
                 }
                 else
                 {
-                    ShowHitParticle();
+                   // ShowHitParticle();
                 }
             }
         }
