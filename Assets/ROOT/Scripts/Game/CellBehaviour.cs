@@ -14,11 +14,7 @@ namespace Watermelon.JellyMerge
 
         private Animator animator;
         private IPool simpleCubePool;
-        private IPool jellyCubePool;
-        private JellyBehaviour jellyRef;
         private SimpleJellyBehaviour simpleJellyRef;
-
-        private GraphicsType graphicsType;
 
         private bool disableAfterMove = false;
         private bool wasMoved = false;
@@ -26,12 +22,6 @@ namespace Watermelon.JellyMerge
 
         public bool locked = false;
         private int hideParameter;
-
-        public enum GraphicsType
-        {
-            Physical,
-            Simple,
-        }
 
         private ColorId colorId;
         public ColorId ColorID
@@ -72,6 +62,7 @@ namespace Watermelon.JellyMerge
         public void Merge(ColorId id)
         {
             colorId = id;
+            simpleJellyRef?.ChangeColor(id);
             // change visual
         }
 
@@ -83,7 +74,7 @@ namespace Watermelon.JellyMerge
             hideParameter = Animator.StringToHash("Hide");
         }
 
-        public void Init(ColorId cellColor, GraphicsType graphicsType)
+        public void Init(ColorId cellColor)
         {
             disableAfterMove = false;
             transformRef.localScale = Vector3.one;
@@ -91,7 +82,7 @@ namespace Watermelon.JellyMerge
             colorId = cellColor;
 
             InitPools();
-            InitGraphics(graphicsType);
+            InitGraphics();
         }
 
         private void InitPools()
@@ -100,20 +91,10 @@ namespace Watermelon.JellyMerge
             //jellyCubePool = PoolManager.GetPoolByName("JellyCube");
         }
 
-        public void InitGraphics(GraphicsType graphicsType)
+        public void InitGraphics()
         {
-            this.graphicsType = graphicsType;
-
-            if (graphicsType == GraphicsType.Simple)
-            {
-                simpleJellyRef = simpleCubePool.GetPooledObject().SetPosition(transformRef.position).GetComponent<SimpleJellyBehaviour>();
-                simpleJellyRef.Init(graphicsHolderTransform, colorId);
-            }
-            else
-            {
-                jellyRef = jellyCubePool.GetPooledObject().SetPosition(transformRef.position).GetComponent<JellyBehaviour>();
-                jellyRef.Init(graphicsHolderTransform, colorId);
-            }
+            simpleJellyRef = simpleCubePool.GetPooledObject().SetPosition(transformRef.position).GetComponent<SimpleJellyBehaviour>();
+            simpleJellyRef.Init(graphicsHolderTransform, colorId);
         }
 
         public void Move(Vector2Int vector, bool disableAfterMove)
@@ -125,12 +106,9 @@ namespace Watermelon.JellyMerge
             {
                 transformRef.DOMove(transformRef.position + new Vector3(vector.x, 0f, vector.y), animationTime).SetEasing(Ease.Type.SineIn).OnComplete(() => OnMovementComplete());
 
-                if (graphicsType == GraphicsType.Simple)
-                {
-                    // calculating movement strength for apropriate animations blending depend on movement speed (distance)
-                    float strength = Mathf.Clamp(vector.magnitude, 0f, 4f) / 5f * Random.Range(0.85f, 1.15f);
-                    simpleJellyRef.PlayMoveAnimation(vector, strength);
-                }
+                // calculating movement strength for apropriate animations blending depend on movement speed (distance)
+                float strength = Mathf.Clamp(vector.magnitude, 0f, 4f) / 5f * Random.Range(0.85f, 1.15f);
+                simpleJellyRef.PlayMoveAnimation(vector, strength);
             }
             else
             {
@@ -191,14 +169,7 @@ namespace Watermelon.JellyMerge
             }
             yield return new WaitForSeconds(animationTime * 0.1f);
 
-            if (graphicsType == GraphicsType.Simple)
-            {
-                simpleJellyRef?.Bounce();
-            }
-            else
-            {
-                jellyRef?.Bounce();
-            }
+            simpleJellyRef?.Bounce();
         }
 
         private void PlaceHitParticle(Transform particle1, Vector2Int moveDirection)
@@ -245,21 +216,11 @@ namespace Watermelon.JellyMerge
 
         private void Disable()
         {
-            //LevelController.OnCellDeactivated();
-
             if (simpleJellyRef != null)
             {
                 simpleJellyRef.Disable();
             }
-
-            if (jellyRef != null)
-            {
-                jellyRef.Disable();
-            }
-
             simpleJellyRef = null;
-            jellyRef = null;
-
             gameObject.SetActive(false);
         }
 
@@ -269,12 +230,6 @@ namespace Watermelon.JellyMerge
             {
                 simpleJellyRef.Disable();
                 simpleJellyRef = null;
-            }
-
-            if (jellyRef != null)
-            {
-                jellyRef.Disable();
-                jellyRef = null;
             }
         }
     }

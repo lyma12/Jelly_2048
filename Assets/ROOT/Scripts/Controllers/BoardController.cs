@@ -76,7 +76,7 @@ namespace ROOT.Scripts.Controllers
                 var worldPosition = GetCellWorldPosition(cell);
                 var newCellBehaviour = cellBehaviourPool.GetPooledObject(worldPosition).GetComponent<CellBehaviour>();
                 newCellBehaviour.TF.SetParent(transform);
-                newCellBehaviour.Init(color, CellBehaviour.GraphicsType.Simple);
+                newCellBehaviour.Init(color);
                 cell.InitColoredItem(newCellBehaviour);
             }
         }
@@ -220,7 +220,8 @@ namespace ROOT.Scripts.Controllers
 
             if (lastValid != null)
             {
-                Swap(cell, lastValid);
+                //Swap(cell, lastValid);
+                cell.Cell.Move(dir.ToVector2Int(), false);
                 return true;
             }
 
@@ -245,11 +246,10 @@ namespace ROOT.Scripts.Controllers
         private void Merge(CellItem a, CellItem b)
         {
             var nextColor = GetNextColor(a.ColorID);
-            var targetPos = GetCellWorldPosition(b);
             var aCell = a.Cell;
-
-            aCell.TF.DOMove(targetPos, CellBehaviour.AnimationTime)
-                .OnComplete(() => aCell.gameObject.SetActive(false));
+            
+            var dir = b.CellIndex - a.CellIndex;
+            aCell.Move(dir.ToVector2Int(),false);
 
             a.Clear();
             b.Cell.Merge(nextColor);
@@ -269,7 +269,8 @@ namespace ROOT.Scripts.Controllers
         private void Swap(CellItem from, CellItem to)
         {
             var cellBehaviour = from.Cell;
-            cellBehaviour.TF.DOMove(GetCellWorldPosition(to), CellBehaviour.AnimationTime);
+            var dir = to.CellIndex - from.CellIndex;
+            cellBehaviour.Move(dir.ToVector2Int(),false);
             to.InitColoredItem(cellBehaviour);
             from.Clear();
         }

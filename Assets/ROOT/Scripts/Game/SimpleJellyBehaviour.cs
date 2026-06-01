@@ -1,5 +1,6 @@
 ﻿#pragma warning disable 0649
 
+using ROOT.Scripts.Controllers;
 using UnityEngine;
 
 namespace Watermelon.JellyMerge
@@ -32,8 +33,18 @@ namespace Watermelon.JellyMerge
         {
             transform.SetParent(graphicsHolder);
             transform.localPosition = new Vector3(0f, 0f, 0f);
+            ChangeColor(cellColor);
         }
-
+        public void ChangeColor(ColorId color)
+        {
+            var material = ColorsController.Instance.GetMaterial(color);
+            if (material == null)
+            {
+                Debug.LogError("Color can't find!");
+                return;
+            }
+            rendererRef.sharedMaterial = material;
+        }
         public void PlayMoveAnimation(Vector2Int movementVector, float movementStrength)
         {
             animatorRef.SetLayerWeight(animatorMovementLayerIndex, movementStrength);
