@@ -25,7 +25,7 @@ namespace Watermelon.JellyMerge
         {
             get
             {
-                float frustumHeight = 2.0f * (instance.transformRef.position.y * 2) * Mathf.Tan(instance.cameraRef.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                float frustumHeight = 2.0f * instance.transformRef.position.y * Mathf.Tan(instance.cameraRef.fieldOfView * 0.5f * Mathf.Deg2Rad);
                 float frustumWidth = frustumHeight * instance.cameraRef.aspect;
 
                 return new Vector2(frustumWidth, frustumHeight);
@@ -34,7 +34,7 @@ namespace Watermelon.JellyMerge
 
 #if UNITY_EDITOR
         private Vector3 levelCenterCached;
-        private Vector2Int levelSizeCached;
+        private Vector2 levelSizeCached;
 #endif
 
         private void Awake()
@@ -50,17 +50,15 @@ namespace Watermelon.JellyMerge
 
         }
 
-        public static void Init(Vector3 levelCenter, Vector2Int levelSize, bool smoothMovement = false)
+        public static void Init(Vector3 levelCenter, Vector2 boardWorldSize, bool smoothMovement = false)
         {
-            instance.InitCamera(levelCenter, levelSize, smoothMovement);
+            instance.InitCamera(levelCenter, boardWorldSize, smoothMovement);
         }
 
-        private void InitCamera(Vector3 levelCenter, Vector2Int levelSize, bool smoothMovement = false)
+        private void InitCamera(Vector3 levelCenter, Vector2 boardWorldSize, bool smoothMovement = false)
         {
-            float cameraHeight = 1;
-
-            float playgroundWidth = (levelSize.x > levelSize.y ? levelSize.x : levelSize.y) + 1.5f;
-            cameraHeight = playgroundWidth * heightToWidthRelation;
+            float playgroundWidth = Mathf.Max(boardWorldSize.x, boardWorldSize.y) + 1.5f;
+            float cameraHeight = playgroundWidth * heightToWidthRelation;
 
             float zOffset = cameraHeight * Mathf.Tan((90f - transform.eulerAngles.x) * Mathf.Deg2Rad);
 
@@ -85,17 +83,16 @@ namespace Watermelon.JellyMerge
             // backplane setup
             backPlaneTransform.position = levelCenter;
 
-            Vector3 scale = new Vector3(levelSize.x, 1, levelSize.y);
+            Vector3 scale = new Vector3(boardWorldSize.x, boardWorldSize.y, 1);
 
             if (smoothMovement)
                 backPlaneTransform.DOScale(scale, animationTime);
             else
                 backPlaneTransform.localScale = scale;
 
-
 #if UNITY_EDITOR
             instance.levelCenterCached = levelCenter;
-            instance.levelSizeCached = levelSize;
+            instance.levelSizeCached = boardWorldSize;
 #endif
         }
 

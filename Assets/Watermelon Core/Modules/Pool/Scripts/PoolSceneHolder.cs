@@ -11,7 +11,6 @@ namespace Watermelon
         {
             foreach(Pool pool in pools)
             {
-                Debug.LogError("ini");
                 pool.Init();
             }
         }

@@ -17,7 +17,6 @@ namespace Watermelon.JellyMerge
         private void Awake()
         {
             instance = this;
-            Debug.LogError("op");
             cellsPool = PoolManager.GetPoolByName("CellBehaviour");
         }
 

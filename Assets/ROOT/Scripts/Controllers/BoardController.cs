@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using ROOT.Scripts.Data;
 using UnityEngine;
+using Watermelon;
 using Watermelon.JellyMerge;
 namespace ROOT.Scripts.Controllers
 {
@@ -15,7 +16,6 @@ namespace ROOT.Scripts.Controllers
         [SerializeField] private LevelConfig levelConfig;
         private CellItem[,] cells;
         [SerializeField] private CellsPool cellBehaviourPool; // Pool trong cấu trúc này không lấy lại được mỗi lần destroy sẽ là setactive nó đi
-        private List<CellBehaviour> cellBehaviours = new List<CellBehaviour>();
         public Vector2Int LastMove = Vector2Int.zero;
         public void ClearBoard()
         {
@@ -40,7 +40,8 @@ namespace ROOT.Scripts.Controllers
                     cells[i, j] = newCell;
                 }
             }
-            CameraController.Init(transform.position, gridSize);
+            var boardWorldSize = new Vector2(gridSize.x * cellSize, gridSize.y * cellSize);
+            CameraController.Init(transform.position, boardWorldSize);
 
             GenerateBorder(CameraController.FrustrumSize);
         }
@@ -76,6 +77,7 @@ namespace ROOT.Scripts.Controllers
                 var newCellBehaviour = cellBehaviourPool.GetPooledObject(worldPosition).GetComponent<CellBehaviour>();
                 newCellBehaviour.TF.SetParent(transform);
                 newCellBehaviour.Init(color, CellBehaviour.GraphicsType.Simple);
+                cell.InitColoredItem(newCellBehaviour);
             }
         }
         public CellItem GetCell(Index2 index)
@@ -100,34 +102,28 @@ namespace ROOT.Scripts.Controllers
         }
         private Index2 GetGridPosition(Vector3 worldPosition)
         {
-            var startPos = new Vector3(
-                -gridSize.x * 0.5f,
-                0,
-                gridSize.y * 0.5f
-            );
-            Vector3 local = transform.InverseTransformPoint(worldPosition) - startPos;
-
+            var origin = GridOrigin();
+            Vector3 local = transform.InverseTransformPoint(worldPosition) - origin;
             int x = Mathf.RoundToInt(local.x / cellSize);
             int y = Mathf.RoundToInt(local.z / cellSize);
-
             return new Index2(x, y);
         }
         public Vector3 GetCellWorldPosition(CellItem cell)
         {
-            var startPos = new Vector3(
-                -gridSize.x * 0.5f,
+            return transform.TransformPoint(GridOrigin() + new Vector3(
+                cell.CellIndex.x * cellSize,
                 0,
-                gridSize.y * 0.5f);
-
-            return transform.TransformPoint(
-                startPos +
-                new Vector3(
-                    cell.CellIndex.x * cellSize,
-                    0,
-                    cell.CellIndex.y * cellSize));
+                cell.CellIndex.y * cellSize));
         }
+        // (0,0) = bottom-left, y tăng dần lên trên (+Z)
+        private Vector3 GridOrigin() => new Vector3(
+            -(gridSize.x - 1) * cellSize * 0.5f,
+            0,
+            -(gridSize.y - 1) * cellSize * 0.5f);
         public void Move(Index2 dir)
         {
+            if (waiting) return;
+
             bool changed = false;
 
             List<CellItem> ordered = GetTraversalOrder(dir);
@@ -150,46 +146,42 @@ namespace ROOT.Scripts.Controllers
         {
             waiting = true;
 
-            yield return new WaitForSeconds(0.1f);
+            yield return new WaitForSeconds(CellBehaviour.AnimationTime + 0.05f);
 
             waiting = false;
 
-            foreach (var tile in cellBehaviours) {
-                tile.locked = false;
-            }
-
-            if (cellBehaviours.Count < gridSize.x * gridSize.y)
-            {
+            if (GetOccupiedCount() < gridSize.x * gridSize.y)
                 SpawnRandomTile();
-            }
 
-            if (CheckForGameOver()) {
+            if (CheckForGameOver())
                 GameController.GameOver();
-            }
+        }
+        private int GetOccupiedCount()
+        {
+            int count = 0;
+            for (int x = 0; x < gridSize.x; x++)
+                for (int y = 0; y < gridSize.y; y++)
+                    if (!cells[x, y].IsEmpty) count++;
+            return count;
         }
         private bool CheckForGameOver()
         {
-            if (cellBehaviours.Count < gridSize.x * gridSize.y)
+            if (GetOccupiedCount() < gridSize.x * gridSize.y)
                 return false;
 
-            foreach (var tile in cellBehaviours)
+            for (int x = 0; x < gridSize.x; x++)
             {
-                Index2 index = GetGridPosition(tile.TF.position);
-                CellItem current = GetCell(index);
+                for (int y = 0; y < gridSize.y; y++)
+                {
+                    CellItem current = cells[x, y];
+                    if (current.IsEmpty) continue;
 
-                if (current == null) continue;
-
-                CellItem up = GetAdjacentCell(current, Vector2Int.up);
-                CellItem down = GetAdjacentCell(current, Vector2Int.down);
-                CellItem left = GetAdjacentCell(current, Vector2Int.left);
-                CellItem right = GetAdjacentCell(current, Vector2Int.right);
-
-                if (up != null && CanMerge(current, up)) return false;
-                if (down != null && CanMerge(current, down)) return false;
-                if (left != null && CanMerge(current, left)) return false;
-                if (right != null && CanMerge(current, right)) return false;
+                    if (CanMerge(current, GetAdjacentCell(current, Vector2Int.up)))    return false;
+                    if (CanMerge(current, GetAdjacentCell(current, Vector2Int.down)))  return false;
+                    if (CanMerge(current, GetAdjacentCell(current, Vector2Int.left)))  return false;
+                    if (CanMerge(current, GetAdjacentCell(current, Vector2Int.right))) return false;
+                }
             }
-
             return true;
         }
         private CellItem GetAdjacentCell(CellItem cell, Vector2Int dir)
@@ -253,10 +245,14 @@ namespace ROOT.Scripts.Controllers
         private void Merge(CellItem a, CellItem b)
         {
             var nextColor = GetNextColor(a.ColorID);
-            a.Cell.gameObject.SetActive(false);
+            var targetPos = GetCellWorldPosition(b);
+            var aCell = a.Cell;
+
+            aCell.TF.DOMove(targetPos, CellBehaviour.AnimationTime)
+                .OnComplete(() => aCell.gameObject.SetActive(false));
+
             a.Clear();
             b.Cell.Merge(nextColor);
-            b.InitColoredItem(b.Cell);
         }
         private ColorId GetNextColor(ColorId currentColor)
         {
@@ -273,6 +269,7 @@ namespace ROOT.Scripts.Controllers
         private void Swap(CellItem from, CellItem to)
         {
             var cellBehaviour = from.Cell;
+            cellBehaviour.TF.DOMove(GetCellWorldPosition(to), CellBehaviour.AnimationTime);
             to.InitColoredItem(cellBehaviour);
             from.Clear();
         }
@@ -299,84 +296,71 @@ namespace ROOT.Scripts.Controllers
         }
         #region Init
 
-         private void GenerateBorder(Vector2 environmentSize)
+        private void GenerateBorder(Vector2 environmentSize)
         {
+            float iL = -gridSize.x * cellSize * 0.5f;
+            float iR =  gridSize.x * cellSize * 0.5f;
+            float iB = -gridSize.y * cellSize * 0.5f;
+            float iT =  gridSize.y * cellSize * 0.5f;
+
+            float oL = -environmentSize.x * 0.5f;
+            float oR =  environmentSize.x * 0.5f;
+            float oB = -environmentSize.y * 0.5f;
+            float oT =  environmentSize.y * 0.5f;
+
             List<Vector3> verts = new List<Vector3>();
-            Vector2[] uvs = new Vector2[verts.Count];
             List<int> tris = new List<int>();
 
-            // top plane
-            float mostLeftX = -(environmentSize.x - gridSize.x) * 0.5f - 0.5f;
-            float mostRightX = gridSize.x - mostLeftX - 1f;
-            float mostLowZ = -(environmentSize.y - gridSize.y) * 0.5f;
-            float mostHighZ = gridSize.y - mostLowZ;
+            // Flat cap — 4 rows × 4 cols
+            // Row 0: z = oT
+            verts.Add(new Vector3(oL, 1f, oT)); // 0
+            verts.Add(new Vector3(iL, 1f, oT)); // 1
+            verts.Add(new Vector3(iR, 1f, oT)); // 2
+            verts.Add(new Vector3(oR, 1f, oT)); // 3
+            // Row 1: z = iT
+            verts.Add(new Vector3(oL, 1f, iT)); // 4
+            verts.Add(new Vector3(iL, 1f, iT)); // 5
+            verts.Add(new Vector3(iR, 1f, iT)); // 6
+            verts.Add(new Vector3(oR, 1f, iT)); // 7
+            // Row 2: z = iB
+            verts.Add(new Vector3(oL, 1f, iB)); // 8
+            verts.Add(new Vector3(iL, 1f, iB)); // 9
+            verts.Add(new Vector3(iR, 1f, iB)); // 10
+            verts.Add(new Vector3(oR, 1f, iB)); // 11
+            // Row 3: z = oB
+            verts.Add(new Vector3(oL, 1f, oB)); // 12
+            verts.Add(new Vector3(iL, 1f, oB)); // 13
+            verts.Add(new Vector3(iR, 1f, oB)); // 14
+            verts.Add(new Vector3(oR, 1f, oB)); // 15
 
-            verts.Add(new Vector3(mostLeftX, 1f, mostHighZ));
-            verts.Add(new Vector3(-0.5f, 1f, mostHighZ));
-            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, mostHighZ));
-            verts.Add(new Vector3(mostRightX, 1f, mostHighZ));
+            // Top strip (rows 0-1)
+            tris.AddRange(new int[] { 0, 5, 4,  0, 1, 5,  1, 2, 6,  1, 6, 5,  2, 3, 7,  2, 7, 6 });
+            // Left strip (rows 1-2, cols 0-1)
+            tris.AddRange(new int[] { 4, 9, 8,  4, 5, 9 });
+            // Right strip (rows 1-2, cols 2-3)
+            tris.AddRange(new int[] { 6, 7, 11,  6, 11, 10 });
+            // Bottom strip (rows 2-3)
+            tris.AddRange(new int[] { 8, 9, 13,  8, 13, 12,  9, 10, 14,  9, 14, 13,  10, 15, 14,  10, 11, 15 });
 
-            verts.Add(new Vector3(mostLeftX, 1f, gridSize.y - 0.5f));
-            verts.Add(new Vector3(-0.5f, 1f, gridSize.y - 0.5f));
-            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, gridSize.y - 0.5f));
-            verts.Add(new Vector3(mostRightX, 1f, gridSize.y - 0.5f));
+            // Vertical walls
+            verts.Add(new Vector3(iL, 1f, iT)); // 16
+            verts.Add(new Vector3(iR, 1f, iT)); // 17
+            verts.Add(new Vector3(iL, 0f, iT)); // 18
+            verts.Add(new Vector3(iR, 0f, iT)); // 19
+            verts.Add(new Vector3(iL, 1f, iB)); // 20
+            verts.Add(new Vector3(iR, 1f, iB)); // 21
+            verts.Add(new Vector3(iL, 0f, iB)); // 22
+            verts.Add(new Vector3(iR, 0f, iB)); // 23
 
-            tris.AddRange(new int[] { 0, 5, 4 });
-            tris.AddRange(new int[] { 0, 1, 5 });
-            tris.AddRange(new int[] { 1, 2, 6 });
-            tris.AddRange(new int[] { 1, 6, 5 });
-            tris.AddRange(new int[] { 2, 3, 7 });
-            tris.AddRange(new int[] { 2, 7, 6 });
-
-
-            verts.Add(new Vector3(mostLeftX, 1f, -0.5f));
-            verts.Add(new Vector3(-0.5f, 1f, -0.5f));
-            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, -0.5f));
-            verts.Add(new Vector3(mostRightX, 1f, -0.5f));
-
-            tris.AddRange(new int[] { 4, 9, 8 });
-            tris.AddRange(new int[] { 4, 5, 9 });
-            tris.AddRange(new int[] { 6, 7, 11 });
-            tris.AddRange(new int[] { 6, 11, 10 });
-
-
-            verts.Add(new Vector3(mostLeftX, 1f, mostLowZ));
-            verts.Add(new Vector3(-0.5f, 1f, mostLowZ));
-            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, mostLowZ));
-            verts.Add(new Vector3(mostRightX, 1f, mostLowZ));
-
-            tris.AddRange(new int[] { 8, 9, 13 });
-            tris.AddRange(new int[] { 8, 13, 12 });
-            tris.AddRange(new int[] { 9, 10, 14 });
-            tris.AddRange(new int[] { 9, 14, 13 });
-            tris.AddRange(new int[] { 10, 15, 14 });
-            tris.AddRange(new int[] { 10, 11, 15 });
-
-
-            // vertical borders
-
-            verts.Add(new Vector3(-0.5f, 1f, gridSize.y - 0.5f));                 //16
-            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, gridSize.y - 0.5f));
-            verts.Add(new Vector3(-0.5f, 0f, gridSize.y - 0.5f));
-            verts.Add(new Vector3(gridSize.x - 0.5f, 0f, gridSize.y - 0.5f));
-            verts.Add(new Vector3(-0.5f, 1f, -0.5f));                               //20
-            verts.Add(new Vector3(gridSize.x - 0.5f, 1f, -0.5f));
-            verts.Add(new Vector3(-0.5f, 0f, -0.5f));
-            verts.Add(new Vector3(gridSize.x - 0.5f, 0f, -0.5f));                 //23
-
-            tris.AddRange(new int[] { 20, 16, 18 });
-            tris.AddRange(new int[] { 20, 18, 22 });
-            tris.AddRange(new int[] { 16, 17, 19 });
-            tris.AddRange(new int[] { 16, 19, 18 });
-            tris.AddRange(new int[] { 17, 21, 19 });
-            tris.AddRange(new int[] { 19, 21, 23 });
-
+            tris.AddRange(new int[] { 20, 16, 18,  20, 18, 22 }); // left wall  (x = iL)
+            tris.AddRange(new int[] { 16, 17, 19,  16, 19, 18 }); // back wall  (z = iT)
+            tris.AddRange(new int[] { 17, 21, 19,  19, 21, 23 }); // right wall (x = iR)
+            tris.AddRange(new int[] { 21, 20, 22,  21, 22, 23 }); // front wall (z = iB)
 
             Mesh mesh = new Mesh();
             mesh.vertices = verts.ToArray();
             mesh.triangles = tris.ToArray();
             mesh.RecalculateNormals();
-
 
             borderMeshFilter.mesh = mesh;
         }
