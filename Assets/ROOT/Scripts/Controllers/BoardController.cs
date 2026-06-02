@@ -40,7 +40,7 @@ namespace ROOT.Scripts.Controllers
                     cells[i, j] = newCell;
                 }
             }
-            var boardWorldSize = new Vector2(gridSize.x * cellSize, gridSize.y * cellSize);
+            var boardWorldSize = new Vector2((gridSize.x + 1) * cellSize, (gridSize.y + 1) * cellSize);
             CameraController.Init(transform.position, boardWorldSize);
 
             GenerateBorder(CameraController.FrustrumSize);
@@ -53,13 +53,16 @@ namespace ROOT.Scripts.Controllers
         }
         private void SpawnRandomTile()
         {
+            if (GetOccupiedCount() >= gridSize.x * gridSize.y) return;
+
             var (color, position) = GetRandomCellColor();
 
             var cell = GetCell(position);
             if (cell == null || !cell.IsEmpty)
             {
-                position = GetSlotEasy(); // fallback
-                cell = GetCell(position);
+                var empty = GetEmptySlots();
+                if (empty.Count == 0) return;
+                position = GetSlotEasy();
             }
 
             SpawnJelly(color, position);
@@ -77,6 +80,7 @@ namespace ROOT.Scripts.Controllers
                 var newCellBehaviour = cellBehaviourPool.GetPooledObject(worldPosition).GetComponent<CellBehaviour>();
                 newCellBehaviour.TF.SetParent(transform);
                 newCellBehaviour.Init(color);
+                newCellBehaviour.PlaySpawnAnimation();
                 cell.InitColoredItem(newCellBehaviour);
             }
         }
@@ -150,6 +154,12 @@ namespace ROOT.Scripts.Controllers
 
             waiting = false;
 
+            // unlock tất cả sau animation để turn tiếp theo có thể merge bình thường
+            for (int x = 0; x < gridSize.x; x++)
+                for (int y = 0; y < gridSize.y; y++)
+                    if (!cells[x, y].IsEmpty && cells[x, y].Cell != null)
+                        cells[x, y].Cell.locked = false;
+
             if (GetOccupiedCount() < gridSize.x * gridSize.y)
                 SpawnRandomTile();
 
@@ -220,8 +230,7 @@ namespace ROOT.Scripts.Controllers
 
             if (lastValid != null)
             {
-                //Swap(cell, lastValid);
-                cell.Cell.Move(dir.ToVector2Int(), false);
+                Swap(cell, lastValid);
                 return true;
             }
 
@@ -236,41 +245,43 @@ namespace ROOT.Scripts.Controllers
         }
         private bool CanMerge(CellItem cell, CellItem target)
         {
+            if (cell == null || target == null) return false;
             if (cell.IsEmpty || target.IsEmpty) return false;
-            if (cell.ColorID == target.ColorID)
-            {
-                return cell.ColorID != ColorId.Color8;
-            }
-            return false;
+            if (target.Cell != null && target.Cell.locked) return false;
+            return cell.ColorID == target.ColorID && cell.ColorID != ColorId.Color8;
         }
         private void Merge(CellItem a, CellItem b)
         {
             var nextColor = GetNextColor(a.ColorID);
-            var aCell = a.Cell;
-            
-            var dir = b.CellIndex - a.CellIndex;
-            aCell.Move(dir.ToVector2Int(),false);
+            var aCell    = a.Cell;
+            var bCell    = b.Cell;
+            var target   = GetCellWorldPosition(b);
+
+            // a trượt vào b; khi đến nơi mới đổi màu + sync CellItem + bounce + cộng điểm
+            aCell.Move(target, true, () =>
+            {
+                bCell.Merge(nextColor);
+                b.InitColoredItem(bCell);
+                bCell.PlayBounce();
+                GameController.AddScore(1 << (int)nextColor); // Color2→4, Color3→8 ... Color8→256
+            });
 
             a.Clear();
-            b.Cell.Merge(nextColor);
+            b.Cell.locked = true;
         }
+        private static readonly int MaxColorIndex =
+            System.Enum.GetValues(typeof(ColorId)).Length - 1;
+
         private ColorId GetNextColor(ColorId currentColor)
         {
-            int index = (int)currentColor;
-
-            index = Mathf.Clamp(
-                index + 1,
-                0,
-                System.Enum.GetValues(typeof(ColorId)).Length - 1
-            );
-
-            return (ColorId)index;
+            return (ColorId)Mathf.Clamp((int)currentColor + 1, 0, MaxColorIndex);
         }
         private void Swap(CellItem from, CellItem to)
         {
             var cellBehaviour = from.Cell;
-            var dir = to.CellIndex - from.CellIndex;
-            cellBehaviour.Move(dir.ToVector2Int(),false);
+            // DOMove đến world position đúng của ô đích, không phụ thuộc cellSize
+            var target = GetCellWorldPosition(to);
+            cellBehaviour.Move(target, false);
             to.InitColoredItem(cellBehaviour);
             from.Clear();
         }
@@ -401,21 +412,27 @@ namespace ROOT.Scripts.Controllers
         private Index2 GetSlotEasy()
         {
             List<Index2> emptySlots = GetEmptySlots();
-
+            if (emptySlots.Count == 0)
+            {
+                Debug.LogError("[BoardController] GetSlotEasy: no empty slots!");
+                return Index2.zero;
+            }
             emptySlots.Sort((a, b) =>
                 CountOccupiedNeighbours(b)
                     .CompareTo(CountOccupiedNeighbours(a)));
-
             return emptySlots[0];
         }
         private Index2 GetSlotHard()
         {
             List<Index2> emptySlots = GetEmptySlots();
-
+            if (emptySlots.Count == 0)
+            {
+                Debug.LogError("[BoardController] GetSlotHard: no empty slots!");
+                return Index2.zero;
+            }
             emptySlots.Sort((a, b) =>
                 CountOccupiedNeighbours(a)
                     .CompareTo(CountOccupiedNeighbours(b)));
-
             return emptySlots[0];
         }
         private List<Index2> GetEmptySlots()
@@ -486,14 +503,15 @@ namespace ROOT.Scripts.Controllers
         }
         private LevelConfigData GetLevelConfigByScore(int score)
         {
+            // Tìm config cao nhất có levelScore <= score
+            // List phải được sort tăng dần theo levelScore
             var result = levelConfig.LevelConfigDatas[0];
             for (var i = 0; i < levelConfig.LevelConfigDatas.Count; i++)
             {
-                if (levelConfig.LevelConfigDatas[i].levelScore >= score)
-                {
+                if (levelConfig.LevelConfigDatas[i].levelScore <= score)
                     result = levelConfig.LevelConfigDatas[i];
+                else
                     break;
-                }
             }
             return result;
         }

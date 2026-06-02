@@ -9,6 +9,7 @@ namespace Watermelon
     public class UIGame : UIPage
     {
         [SerializeField] TMP_Text levelText;
+        [SerializeField] TMP_Text scoreText;
         [SerializeField] Button skipLevelButton;
         [SerializeField] Button restartButton;
 
@@ -71,9 +72,16 @@ namespace Watermelon
 
         #region Show/Hide
 
+        public void UpdateScore(int score)
+        {
+            if (scoreText != null)
+                scoreText.text = score.ToString();
+        }
+
         public override void PlayShowAnimation()
         {
             levelText.text = "LEVEL " + (GameController.CurrentScore + 1);
+            UpdateScore(GameController.GameScore);
             skipLevelButton.gameObject.SetActive(AdsManager.IsRewardBasedVideoLoaded());
 
             UIController.OnPageOpened(this);

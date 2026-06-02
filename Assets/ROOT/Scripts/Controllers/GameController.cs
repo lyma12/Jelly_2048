@@ -12,11 +12,29 @@ namespace Watermelon.JellyMerge
         private static GameController instance;
         [SerializeField] UIController uiController;
         private static ParticlesController particlesController;
+
+        // Level counter (số ván đã chơi)
         private SimpleIntSave currentScore;
         public static int CurrentScore
         {
             get { return instance.currentScore.Value; }
             private set { instance.currentScore.Value = value; }
+        }
+
+        // Game score (điểm trong ván hiện tại)
+        private static int gameScore;
+        public static int GameScore => gameScore;
+
+        public static void AddScore(int points)
+        {
+            gameScore += points;
+            UIController.GetPage<UIGame>()?.UpdateScore(gameScore);
+        }
+
+        public static void ResetScore()
+        {
+            gameScore = 0;
+            UIController.GetPage<UIGame>()?.UpdateScore(0);
         }
 
         private void Awake()
@@ -52,6 +70,7 @@ namespace Watermelon.JellyMerge
             // }
             //
             // SavePresets.CreateSave("Level " + (CurrentLevelIndex + 1).ToString("000"), "Levels");
+            ResetScore();
             GamePlayController.Instance.OnPlay();
         }
 

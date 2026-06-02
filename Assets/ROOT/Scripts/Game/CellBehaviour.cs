@@ -19,6 +19,7 @@ namespace Watermelon.JellyMerge
         private bool disableAfterMove = false;
         private bool wasMoved = false;
         private bool showHitParticle = false;
+        private System.Action onMoveComplete;
 
         public bool locked = false;
         private int hideParameter;
@@ -97,18 +98,29 @@ namespace Watermelon.JellyMerge
             simpleJellyRef.Init(graphicsHolderTransform, colorId);
         }
 
-        public void Move(Vector2Int vector, bool disableAfterMove)
+        public void Move(Vector3 targetPosition, bool disableAfterMove, System.Action onComplete = null)
         {
             this.disableAfterMove = disableAfterMove;
+            this.onMoveComplete   = onComplete;
             wasMoved = true;
 
-            if (vector != Vector2Int.zero)
-            {
-                transformRef.DOMove(transformRef.position + new Vector3(vector.x, 0f, vector.y), animationTime).SetEasing(Ease.Type.SineIn).OnComplete(() => OnMovementComplete());
+            Vector3 delta = targetPosition - transformRef.position;
 
-                // calculating movement strength for apropriate animations blending depend on movement speed (distance)
-                float strength = Mathf.Clamp(vector.magnitude, 0f, 4f) / 5f * Random.Range(0.85f, 1.15f);
-                simpleJellyRef.PlayMoveAnimation(vector, strength);
+            if (delta.sqrMagnitude > 0.0001f)
+            {
+                transformRef.DOMove(targetPosition, animationTime)
+                    .SetEasing(Ease.Type.SineIn)
+                    .OnComplete(() => OnMovementComplete());
+
+                if (simpleJellyRef != null)
+                {
+                    var dir2D = new Vector2Int(
+                        Mathf.RoundToInt(Mathf.Sign(delta.x)),
+                        Mathf.RoundToInt(Mathf.Sign(delta.z)));
+
+                    float strength = Mathf.Clamp(delta.magnitude, 0f, 4f) / 5f * Random.Range(0.85f, 1.15f);
+                    simpleJellyRef.PlayMoveAnimation(dir2D, strength);
+                }
             }
             else
             {
@@ -118,16 +130,26 @@ namespace Watermelon.JellyMerge
 
         public void OnMovementComplete()
         {
-            if (disableAfterMove)
-            {
-                Disable();
-            }
-            else
-            {
-                transformRef.position = new Vector3(Mathf.RoundToInt(transformRef.position.x), 0f, Mathf.RoundToInt(transformRef.position.z));
-            }
+            if (disableAfterMove) Disable();
+
+            var cb = onMoveComplete;
+            onMoveComplete = null;
+            cb?.Invoke();
 
             wasMoved = false;
+        }
+
+        // Pop-in animation khi tile mới spawn
+        public void PlaySpawnAnimation()
+        {
+            transformRef.localScale = Vector3.zero;
+            transformRef.DOScale(Vector3.one, 0.15f).SetEasing(Ease.Type.BackOut);
+        }
+
+        // Bounce visual sau khi merge hoàn thành
+        public void PlayBounce()
+        {
+            simpleJellyRef?.Bounce();
         }
 
         private void OnTriggerEnter(Collider other)
